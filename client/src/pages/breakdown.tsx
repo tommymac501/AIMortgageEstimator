@@ -1,0 +1,258 @@
+import { useEffect } from "react";
+import { useParams, useLocation } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { 
+  ArrowLeft, 
+  Share2, 
+  Home, 
+  Percent, 
+  Shield, 
+  Building2, 
+  FileText,
+  Droplets,
+  Umbrella,
+  MoreHorizontal,
+  Save,
+  Edit
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import type { SavedCalculation } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { isUnauthorizedError } from "@/lib/authUtils";
+
+export default function Breakdown() {
+  const { id } = useParams<{ id: string }>();
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+
+  const { data: calculation, isLoading } = useQuery<SavedCalculation>({
+    queryKey: ["/api/calculations", id],
+    enabled: !!id,
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/calculations/${id}/save`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/calculations"] });
+      toast({
+        title: "Calculation Saved",
+        description: "This calculation has been saved to your profile.",
+      });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Save Failed",
+        description: error.message || "Unable to save calculation.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="h-8 w-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!calculation) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+        <p className="text-foreground mb-4">Calculation not found</p>
+        <Button onClick={() => navigate("/")} data-testid="button-back-home">
+          Go Home
+        </Button>
+      </div>
+    );
+  }
+
+  const paymentComponents = [
+    {
+      icon: Home,
+      label: "Principal",
+      value: calculation.principal,
+      color: "text-primary",
+    },
+    {
+      icon: Percent,
+      label: "Interest",
+      value: calculation.interest,
+      color: "text-chart-2",
+    },
+    {
+      icon: Building2,
+      label: "Property Taxes",
+      value: calculation.propertyTaxes,
+      color: "text-chart-3",
+    },
+    {
+      icon: Building2,
+      label: "HOA",
+      value: calculation.hoa,
+      color: "text-chart-4",
+    },
+    {
+      icon: Shield,
+      label: "PMI",
+      value: calculation.pmi,
+      color: "text-chart-5",
+    },
+    {
+      icon: Umbrella,
+      label: "Homeowners Insurance",
+      value: calculation.homeownersInsurance,
+      color: "text-primary",
+    },
+    {
+      icon: Droplets,
+      label: "Flood Insurance",
+      value: calculation.floodInsurance,
+      color: "text-chart-2",
+    },
+    {
+      icon: MoreHorizontal,
+      label: "Other",
+      value: calculation.other,
+      color: "text-chart-3",
+    },
+  ];
+
+  const formatCurrency = (value: string | number) => {
+    const num = typeof value === "string" ? parseFloat(value) : value;
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(num);
+  };
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <div className="max-w-md mx-auto">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-lg border-b border-border p-4 flex items-center justify-between">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/")}
+            data-testid="button-back"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            data-testid="button-share"
+          >
+            <Share2 className="h-5 w-5" />
+          </Button>
+        </div>
+
+        <div className="p-4 pt-6 space-y-6">
+          {/* Title */}
+          <div className="space-y-1">
+            <h1 className="text-2xl font-bold text-foreground">Payment Breakdown</h1>
+            <p className="text-sm text-muted-foreground">
+              Your detailed monthly mortgage payment
+            </p>
+          </div>
+
+          {/* Total Monthly Payment Card */}
+          <Card className="p-6 bg-primary text-primary-foreground">
+            <div className="space-y-1">
+              <p className="text-sm opacity-90">Total Monthly Payment</p>
+              <p className="text-5xl font-bold" data-testid="text-total-payment">
+                {formatCurrency(calculation.totalMonthlyPayment)}
+              </p>
+            </div>
+          </Card>
+
+          {/* Payment Components */}
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold text-foreground">Payment Components</h2>
+            
+            <Card className="divide-y divide-border">
+              {paymentComponents.map((component, index) => (
+                <div
+                  key={component.label}
+                  className="flex items-center justify-between p-4 hover-elevate"
+                  data-testid={`component-${component.label.toLowerCase().replace(/\s+/g, "-")}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center ${component.color}`}>
+                      <component.icon className="h-5 w-5" />
+                    </div>
+                    <span className="text-sm font-medium text-foreground">
+                      {component.label}
+                    </span>
+                  </div>
+                  <span className="text-base font-semibold text-foreground">
+                    {formatCurrency(component.value)}
+                  </span>
+                </div>
+              ))}
+            </Card>
+          </div>
+
+          {/* Address Info */}
+          {calculation.address && (
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground mb-1">Property Address</p>
+              <p className="text-sm font-medium text-foreground">{calculation.address}</p>
+            </Card>
+          )}
+
+          {/* Action Buttons */}
+          <div className="space-y-3">
+            <Button
+              variant="outline"
+              className="w-full h-12 rounded-full"
+              onClick={() => navigate("/")}
+              data-testid="button-edit"
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Edit Details
+            </Button>
+            
+            <Button
+              className="w-full h-14 text-base font-semibold rounded-full"
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+              data-testid="button-save-calculation"
+            >
+              {saveMutation.isPending ? (
+                <span className="flex items-center gap-2">
+                  <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Saving...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Save className="h-5 w-5" />
+                  Save Calculation
+                </span>
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
