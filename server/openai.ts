@@ -5,7 +5,7 @@ import OpenAI from "openai";
 const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  timeout: 30000, // 30 second timeout
+  timeout: 15000, // 15 second timeout
 });
 
 interface MortgageCalculationInput {
@@ -34,75 +34,147 @@ interface MortgageCalculationResult {
   totalMonthlyPayment: number;
 }
 
-// Use simplified calculations instead of AI to avoid delays
+// Extract zip code from address
+function extractZipCode(address: string): string | null {
+  const zipMatch = address.match(/\b\d{5}(?:-\d{4})?\b/);
+  return zipMatch ? zipMatch[0] : null;
+}
+
+// Standard math calculations for principal, interest, and PMI
+function calculatePrincipalAndInterest(
+  askingPrice: number,
+  amountDown: number | undefined,
+  creditScore: number | undefined,
+  mortgageType: string | undefined
+): { principal: number; interest: number; pmi: number; monthlyPayment: number } {
+  const loanAmount = askingPrice - (amountDown || 0);
+  const downPaymentPercent = amountDown ? (amountDown / askingPrice) * 100 : 0;
+
+  // Interest rate based on credit score
+  const score = creditScore || 720;
+  let interestRate = 6.5;
+  if (score >= 780) interestRate = 6.0;
+  else if (score >= 740) interestRate = 6.25;
+  else if (score >= 700) interestRate = 6.5;
+  else if (score >= 660) interestRate = 7.0;
+  else interestRate = 7.5;
+
+  // Mortgage term
+  const mortgageYears = mortgageType?.includes("15") ? 15 : 30;
+  const mortgageMonths = mortgageYears * 12;
+
+  // Amortization formula
+  const monthlyRate = interestRate / 100 / 12;
+  const monthlyPayment =
+    loanAmount *
+    ((monthlyRate * Math.pow(1 + monthlyRate, mortgageMonths)) /
+      (Math.pow(1 + monthlyRate, mortgageMonths) - 1));
+
+  // First month interest
+  const firstMonthInterest = loanAmount * monthlyRate;
+  const principal = monthlyPayment - firstMonthInterest;
+
+  // PMI calculation (if down payment < 20%)
+  let pmi = 0;
+  if (downPaymentPercent < 20 && downPaymentPercent > 0) {
+    const pmiRate = 0.008; // 0.8% annual rate
+    pmi = Math.round((loanAmount * pmiRate) / 12 * 100) / 100;
+  }
+
+  return {
+    principal: Math.round(principal * 100) / 100,
+    interest: Math.round(firstMonthInterest * 100) / 100,
+    pmi,
+    monthlyPayment,
+  };
+}
+
 export async function calculateMortgageWithAI(
   input: MortgageCalculationInput
 ): Promise<MortgageCalculationResult> {
   try {
-    // Standard mortgage calculations
-    const loanAmount = input.askingPrice - (input.financialProfile.amountDown || 0);
-    const downPaymentPercent = input.financialProfile.amountDown ? 
-      (input.financialProfile.amountDown / input.askingPrice) * 100 : 0;
+    // Use standard math for principal, interest, and PMI
+    const mathResults = calculatePrincipalAndInterest(
+      input.askingPrice,
+      input.financialProfile.amountDown,
+      input.financialProfile.creditScore,
+      input.financialProfile.mortgageType
+    );
 
-    // Get current mortgage rate based on credit score (simplified)
-    const creditScore = input.financialProfile.creditScore || 720;
-    let interestRate = 6.5; // Base rate
-    if (creditScore >= 780) interestRate = 6.0;
-    else if (creditScore >= 740) interestRate = 6.25;
-    else if (creditScore >= 700) interestRate = 6.5;
-    else if (creditScore >= 660) interestRate = 7.0;
-    else interestRate = 7.5;
+    // Extract zip code for tax lookup
+    const zipCode = extractZipCode(input.address);
 
-    // Mortgage term (years)
-    const mortgageYears = input.financialProfile.mortgageType?.includes("15") ? 15 : 30;
-    const mortgageMonths = mortgageYears * 12;
+    // Use AI for property taxes (with homestead exemption), HOA, and insurance estimates
+    const prompt = `You are a real estate and mortgage expert. Based on the following information, provide accurate estimates for property taxes, HOA fees, and insurance costs.
 
-    // Calculate principal and interest using amortization formula
-    const monthlyRate = interestRate / 100 / 12;
-    const monthlyPayment = loanAmount * 
-      (monthlyRate * Math.pow(1 + monthlyRate, mortgageMonths)) / 
-      (Math.pow(1 + monthlyRate, mortgageMonths) - 1);
+Property Information:
+- Address: ${input.address}
+- Zip Code: ${zipCode || "Unknown"}
+- Asking Price: $${input.askingPrice.toLocaleString()}
+- Homestead Exemption: ${input.financialProfile.homesteadExemption ? "YES - Apply any available homestead exemption discounts for this location" : "NO"}
 
-    // First month interest calculation (decreases over time, this is approximate first month)
-    const firstMonthInterest = loanAmount * monthlyRate;
-    const principal = monthlyPayment - firstMonthInterest;
+Please research and provide monthly cost estimates in JSON format with these exact keys:
+- propertyTaxes: Monthly property tax estimate (account for homestead exemption if applicable for this zip code)
+- hoa: Monthly HOA fees (0 if not a condo/townhouse/planned community)
+- homeownersInsurance: Monthly homeowners insurance estimate
+- floodInsurance: Monthly flood insurance estimate (0 if low/no risk)
 
-    // Property taxes (average ~1.2% of home value per year)
-    let propertyTaxRate = 0.012;
-    if (input.financialProfile.homesteadExemption) {
-      propertyTaxRate = 0.008; // Reduced with homestead exemption
+Return ONLY valid JSON. Example:
+{
+  "propertyTaxes": 250,
+  "hoa": 0,
+  "homeownersInsurance": 125,
+  "floodInsurance": 50
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a financial expert. Return only valid JSON with numeric values for monthly costs.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      response_format: { type: "json_object" },
+      max_completion_tokens: 500,
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("No response from AI");
     }
-    const propertyTaxes = Math.round((input.askingPrice * propertyTaxRate) / 12 * 100) / 100;
 
-    // HOA fees (if property type suggests it)
-    const hoa = input.address.toLowerCase().includes("condo") || 
-                input.address.toLowerCase().includes("townhouse") ? 150 : 0;
+    const aiResults = JSON.parse(content);
 
-    // PMI calculation (if down payment < 20%)
-    let pmi = 0;
-    if (downPaymentPercent < 20 && downPaymentPercent > 0) {
-      // Standard PMI is 0.3% - 1.5% of loan amount annually
-      const pmiRate = 0.008; // 0.8% annual rate
-      pmi = Math.round((loanAmount * pmiRate) / 12 * 100) / 100;
-    }
+    // Ensure all values are numbers
+    const propertyTaxes = Math.round(parseFloat(aiResults.propertyTaxes) * 100) / 100 || 250;
+    const hoa = Math.round(parseFloat(aiResults.hoa) * 100) / 100 || 0;
+    const homeownersInsurance =
+      Math.round(parseFloat(aiResults.homeownersInsurance) * 100) / 100 || 125;
+    const floodInsurance = Math.round(parseFloat(aiResults.floodInsurance) * 100) / 100 || 0;
+    const other = 50; // Miscellaneous costs
 
-    // Homeowners insurance (average ~$100-200/month, varies by location)
-    const homeownersInsurance = 150;
-
-    // Flood insurance (most properties don't need it, estimate low)
-    const floodInsurance = 0;
-
-    // Other costs
-    const other = 50;
-
-    const total = principal + firstMonthInterest + propertyTaxes + hoa + pmi + homeownersInsurance + floodInsurance + other;
+    const total =
+      mathResults.principal +
+      mathResults.interest +
+      propertyTaxes +
+      hoa +
+      mathResults.pmi +
+      homeownersInsurance +
+      floodInsurance +
+      other;
 
     return {
-      principal: Math.round(principal * 100) / 100,
-      interest: Math.round(firstMonthInterest * 100) / 100,
+      principal: mathResults.principal,
+      interest: mathResults.interest,
       propertyTaxes,
       hoa,
-      pmi,
+      pmi: mathResults.pmi,
       homeownersInsurance,
       floodInsurance,
       other,
