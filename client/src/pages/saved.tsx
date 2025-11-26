@@ -1,17 +1,19 @@
-import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Home as HomeIcon, Calendar, MapPin } from "lucide-react";
+import { Home as HomeIcon, Calendar, MapPin, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import type { SavedCalculation } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function Saved() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -31,6 +33,34 @@ export default function Saved() {
     queryKey: ["/api/calculations"],
     enabled: isAuthenticated,
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (calcId: string) => {
+      await apiRequest("DELETE", `/api/calculations/${calcId}`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/calculations"] });
+      toast({
+        title: "Calculation Deleted",
+        description: "The saved calculation has been removed.",
+      });
+      setDeletingId(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Unable to delete calculation.",
+        variant: "destructive",
+      });
+      setDeletingId(null);
+    },
+  });
+
+  const handleDelete = (e: React.MouseEvent, calcId: string) => {
+    e.stopPropagation();
+    setDeletingId(calcId);
+    deleteMutation.mutate(calcId);
+  };
 
   const formatCurrency = (value: string | number) => {
     const num = typeof value === "string" ? parseFloat(value) : value;
@@ -137,6 +167,23 @@ export default function Saved() {
                         {formatCurrency(calc.totalMonthlyPayment)}
                       </p>
                     </div>
+                  </div>
+
+                  {/* Delete Button */}
+                  <div className="flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => handleDelete(e, calc.id)}
+                      disabled={deletingId === calc.id}
+                      data-testid={`button-delete-${calc.id}`}
+                    >
+                      {deletingId === calc.id ? (
+                        <div className="h-4 w-4 border-2 border-destructive/30 border-t-destructive rounded-full animate-spin" />
+                      ) : (
+                        <Trash2 className="h-5 w-5 text-destructive" />
+                      )}
+                    </Button>
                   </div>
                 </div>
               </Card>
