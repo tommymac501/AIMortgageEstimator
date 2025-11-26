@@ -209,6 +209,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/calculations/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const calculation = await storage.getCalculation(req.params.id);
+      
+      if (!calculation) {
+        return res.status(404).json({ message: "Calculation not found" });
+      }
+      
+      // Verify ownership
+      if (calculation.userId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      // Extract editable fields from request body
+      const {
+        propertyTaxes,
+        hoa,
+        pmi,
+        homeownersInsurance,
+        floodInsurance,
+        other,
+        address,
+        askingPrice,
+      } = req.body;
+      
+      // Build updates object with only provided fields
+      const updates: Record<string, string> = {};
+      if (propertyTaxes !== undefined) updates.propertyTaxes = propertyTaxes.toString();
+      if (hoa !== undefined) updates.hoa = hoa.toString();
+      if (pmi !== undefined) updates.pmi = pmi.toString();
+      if (homeownersInsurance !== undefined) updates.homeownersInsurance = homeownersInsurance.toString();
+      if (floodInsurance !== undefined) updates.floodInsurance = floodInsurance.toString();
+      if (other !== undefined) updates.other = other.toString();
+      if (address !== undefined) updates.address = address;
+      if (askingPrice !== undefined) updates.askingPrice = askingPrice.toString();
+      
+      // Recalculate total monthly payment
+      const principal = parseFloat(calculation.principal as unknown as string);
+      const interest = parseFloat(calculation.interest as unknown as string);
+      const newPropertyTaxes = propertyTaxes !== undefined ? parseFloat(propertyTaxes) : parseFloat(calculation.propertyTaxes as unknown as string);
+      const newHoa = hoa !== undefined ? parseFloat(hoa) : parseFloat(calculation.hoa as unknown as string);
+      const newPmi = pmi !== undefined ? parseFloat(pmi) : parseFloat(calculation.pmi as unknown as string);
+      const newHomeownersInsurance = homeownersInsurance !== undefined ? parseFloat(homeownersInsurance) : parseFloat(calculation.homeownersInsurance as unknown as string);
+      const newFloodInsurance = floodInsurance !== undefined ? parseFloat(floodInsurance) : parseFloat(calculation.floodInsurance as unknown as string);
+      const newOther = other !== undefined ? parseFloat(other) : parseFloat(calculation.other as unknown as string);
+      
+      const newTotal = principal + interest + newPropertyTaxes + newHoa + newPmi + newHomeownersInsurance + newFloodInsurance + newOther;
+      updates.totalMonthlyPayment = newTotal.toString();
+      
+      const updatedCalculation = await storage.updateCalculation(req.params.id, updates);
+      res.json(updatedCalculation);
+    } catch (error) {
+      console.error("Error updating calculation:", error);
+      res.status(500).json({ message: "Failed to update calculation" });
+    }
+  });
+
   app.delete("/api/calculations/:id", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
