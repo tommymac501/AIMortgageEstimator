@@ -118,6 +118,28 @@ export default function Home() {
     }
   };
 
+  const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const text = e.target.value;
+    
+    // Pattern to match prices like $500,000 or $500000
+    const pricePattern = /\$[\d,]+(?:\.\d{2})?/;
+    const match = text.match(pricePattern);
+    
+    if (match) {
+      const priceStr = match[0].replace(/[$,]/g, "");
+      const price = parseFloat(priceStr);
+      
+      // Set the asking price
+      form.setValue("askingPrice", price.toString());
+      
+      // Remove price from address and update it
+      const addressWithoutPrice = text.replace(pricePattern, "").trim();
+      form.setValue("address", addressWithoutPrice);
+    } else {
+      form.setValue("address", text);
+    }
+  };
+
   const onSubmit = (data: MortgageCalculationFormData) => {
     // Check if profile is complete (has key fields)
     const hasCompleteProfile = profile && 
@@ -168,9 +190,11 @@ export default function Home() {
               <Input
                 id="address"
                 data-testid="input-address"
-                placeholder="e.g. 123 Dream Home Ave"
+                placeholder="e.g. 123 Dream Home Ave, $500000"
                 className="pl-10 h-14 text-base"
-                {...form.register("address")}
+                {...form.register("address", {
+                  onChange: handleAddressChange,
+                })}
               />
             </div>
             {form.formState.errors.address && (
