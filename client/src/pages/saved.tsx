@@ -80,6 +80,17 @@ export default function Saved() {
     }).format(new Date(date));
   };
 
+  const calculateInterestRate = (calc: SavedCalculation) => {
+    const askingPrice = parseFloat(calc.askingPrice as unknown as string);
+    const downPayment = calc.snapshotAmountDown ? parseFloat(calc.snapshotAmountDown as unknown as string) : 0;
+    const loanAmount = askingPrice - downPayment;
+    const monthlyInterest = parseFloat(calc.interest as unknown as string);
+    
+    if (loanAmount <= 0) return "0.00";
+    const annualRate = (monthlyInterest * 12 * 100) / loanAmount;
+    return annualRate.toFixed(2);
+  };
+
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -165,6 +176,9 @@ export default function Saved() {
                       <p className="text-xs text-muted-foreground">Total Monthly Payment</p>
                       <p className="text-xl font-bold text-primary" data-testid={`payment-${calc.id}`}>
                         {formatCurrency(calc.totalMonthlyPayment)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        with {formatCurrency(calc.snapshotAmountDown ? parseFloat(calc.snapshotAmountDown as unknown as string) : 0)} down at {calculateInterestRate(calc)}%
                       </p>
                     </div>
                   </div>

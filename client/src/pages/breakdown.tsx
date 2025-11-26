@@ -58,12 +58,12 @@ export default function Breakdown() {
   useEffect(() => {
     if (calculation) {
       setEditValues({
-        propertyTaxes: parseFloat(calculation.propertyTaxes as unknown as string).toFixed(0),
-        hoa: parseFloat(calculation.hoa as unknown as string).toFixed(0),
-        pmi: parseFloat(calculation.pmi as unknown as string).toFixed(0),
-        homeownersInsurance: parseFloat(calculation.homeownersInsurance as unknown as string).toFixed(0),
-        floodInsurance: parseFloat(calculation.floodInsurance as unknown as string).toFixed(0),
-        other: parseFloat(calculation.other as unknown as string).toFixed(0),
+        propertyTaxes: parseFloat(calculation.propertyTaxes as unknown as string).toFixed(2),
+        hoa: parseFloat(calculation.hoa as unknown as string).toFixed(2),
+        pmi: parseFloat(calculation.pmi as unknown as string).toFixed(2),
+        homeownersInsurance: parseFloat(calculation.homeownersInsurance as unknown as string).toFixed(2),
+        floodInsurance: parseFloat(calculation.floodInsurance as unknown as string).toFixed(2),
+        other: parseFloat(calculation.other as unknown as string).toFixed(2),
       });
     }
   }, [calculation]);
@@ -154,12 +154,12 @@ export default function Breakdown() {
     // Reset to original values
     if (calculation) {
       setEditValues({
-        propertyTaxes: parseFloat(calculation.propertyTaxes as unknown as string).toFixed(0),
-        hoa: parseFloat(calculation.hoa as unknown as string).toFixed(0),
-        pmi: parseFloat(calculation.pmi as unknown as string).toFixed(0),
-        homeownersInsurance: parseFloat(calculation.homeownersInsurance as unknown as string).toFixed(0),
-        floodInsurance: parseFloat(calculation.floodInsurance as unknown as string).toFixed(0),
-        other: parseFloat(calculation.other as unknown as string).toFixed(0),
+        propertyTaxes: parseFloat(calculation.propertyTaxes as unknown as string).toFixed(2),
+        hoa: parseFloat(calculation.hoa as unknown as string).toFixed(2),
+        pmi: parseFloat(calculation.pmi as unknown as string).toFixed(2),
+        homeownersInsurance: parseFloat(calculation.homeownersInsurance as unknown as string).toFixed(2),
+        floodInsurance: parseFloat(calculation.floodInsurance as unknown as string).toFixed(2),
+        other: parseFloat(calculation.other as unknown as string).toFixed(2),
       });
     }
     setIsEditMode(false);
