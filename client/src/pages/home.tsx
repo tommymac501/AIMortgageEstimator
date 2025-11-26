@@ -72,30 +72,13 @@ export default function Home() {
     }
   };
 
-  const triggerPaste = async () => {
-    try {
-      const imageData = await navigator.clipboard.read();
-      for (const item of imageData) {
-        if (item.type.startsWith("image/")) {
-          const blob = await item.getType(item.type);
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const result = reader.result as string;
-            setPhotoPreview(result);
-            form.setValue("propertyPhotoUrl", result);
-            setShowPasteButton(false);
-          };
-          reader.readAsDataURL(blob);
-          return;
-        }
-      }
-    } catch (err) {
-      toast({
-        title: "Paste Failed",
-        description: "No image found in clipboard",
-        variant: "destructive",
-      });
-    }
+  const triggerPaste = () => {
+    // Just focus on the card to prepare for keyboard paste
+    toast({
+      title: "Ready to paste",
+      description: "Press Cmd+V (Mac) or Ctrl+V (Windows/Linux)",
+      variant: "default",
+    });
   };
 
   const onSubmit = (data: MortgageCalculationFormData) => {
@@ -217,7 +200,6 @@ export default function Home() {
                 </div>
               ) : showPasteButton ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
-                  <p className="text-sm font-medium text-foreground">Ready to paste</p>
                   <Button
                     type="button"
                     onClick={(e) => {
@@ -229,6 +211,7 @@ export default function Home() {
                   >
                     Paste from Clipboard
                   </Button>
+                  <p className="text-xs text-muted-foreground">Cmd+V or Ctrl+V</p>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
