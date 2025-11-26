@@ -80,15 +80,26 @@ export default function Saved() {
     }).format(new Date(date));
   };
 
+  const safeParseNumber = (value: unknown): number => {
+    if (value === null || value === undefined) return 0;
+    const num = parseFloat(String(value));
+    return isNaN(num) ? 0 : num;
+  };
+
   const calculateInterestRate = (calc: SavedCalculation) => {
-    const askingPrice = parseFloat(calc.askingPrice as unknown as string);
-    const downPayment = calc.snapshotAmountDown ? parseFloat(calc.snapshotAmountDown as unknown as string) : 0;
+    const askingPrice = safeParseNumber(calc.askingPrice);
+    const downPayment = safeParseNumber(calc.snapshotAmountDown);
     const loanAmount = askingPrice - downPayment;
-    const monthlyInterest = parseFloat(calc.interest as unknown as string);
+    const monthlyInterest = safeParseNumber(calc.interest);
     
     if (loanAmount <= 0) return "0.00";
     const annualRate = (monthlyInterest * 12 * 100) / loanAmount;
     return annualRate.toFixed(2);
+  };
+
+  const getDownPaymentDisplay = (calc: SavedCalculation) => {
+    const downPayment = safeParseNumber(calc.snapshotAmountDown);
+    return formatCurrency(downPayment);
   };
 
   if (authLoading || isLoading) {
@@ -178,7 +189,7 @@ export default function Saved() {
                         {formatCurrency(calc.totalMonthlyPayment)}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        with {formatCurrency(calc.snapshotAmountDown ? parseFloat(calc.snapshotAmountDown as unknown as string) : 0)} down at {calculateInterestRate(calc)}%
+                        with {getDownPaymentDisplay(calc)} down at {calculateInterestRate(calc)}%
                       </p>
                     </div>
                   </div>

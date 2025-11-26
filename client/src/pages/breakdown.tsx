@@ -54,16 +54,24 @@ export default function Breakdown() {
     enabled: !!id,
   });
 
+  // Safe parse function to handle null/undefined/invalid values
+  const safeParseNumber = (value: unknown): string => {
+    if (value === null || value === undefined) return "0.00";
+    const num = parseFloat(String(value));
+    if (isNaN(num)) return "0.00";
+    return num.toFixed(2);
+  };
+
   // Initialize edit values when calculation loads
   useEffect(() => {
     if (calculation) {
       setEditValues({
-        propertyTaxes: parseFloat(calculation.propertyTaxes as unknown as string).toFixed(2),
-        hoa: parseFloat(calculation.hoa as unknown as string).toFixed(2),
-        pmi: parseFloat(calculation.pmi as unknown as string).toFixed(2),
-        homeownersInsurance: parseFloat(calculation.homeownersInsurance as unknown as string).toFixed(2),
-        floodInsurance: parseFloat(calculation.floodInsurance as unknown as string).toFixed(2),
-        other: parseFloat(calculation.other as unknown as string).toFixed(2),
+        propertyTaxes: safeParseNumber(calculation.propertyTaxes),
+        hoa: safeParseNumber(calculation.hoa),
+        pmi: safeParseNumber(calculation.pmi),
+        homeownersInsurance: safeParseNumber(calculation.homeownersInsurance),
+        floodInsurance: safeParseNumber(calculation.floodInsurance),
+        other: safeParseNumber(calculation.other),
       });
     }
   }, [calculation]);
@@ -141,8 +149,17 @@ export default function Breakdown() {
   });
 
   const handleEditValueChange = (field: keyof EditableValues, value: string) => {
-    // Allow only numbers and decimal point
-    const cleaned = value.replace(/[^0-9.]/g, "");
+    // Allow only numbers and single decimal point
+    let cleaned = value.replace(/[^0-9.]/g, "");
+    // Only allow one decimal point
+    const parts = cleaned.split(".");
+    if (parts.length > 2) {
+      cleaned = parts[0] + "." + parts.slice(1).join("");
+    }
+    // Limit to 2 decimal places
+    if (parts.length === 2 && parts[1].length > 2) {
+      cleaned = parts[0] + "." + parts[1].slice(0, 2);
+    }
     setEditValues((prev) => ({ ...prev, [field]: cleaned }));
   };
 
@@ -154,12 +171,12 @@ export default function Breakdown() {
     // Reset to original values
     if (calculation) {
       setEditValues({
-        propertyTaxes: parseFloat(calculation.propertyTaxes as unknown as string).toFixed(2),
-        hoa: parseFloat(calculation.hoa as unknown as string).toFixed(2),
-        pmi: parseFloat(calculation.pmi as unknown as string).toFixed(2),
-        homeownersInsurance: parseFloat(calculation.homeownersInsurance as unknown as string).toFixed(2),
-        floodInsurance: parseFloat(calculation.floodInsurance as unknown as string).toFixed(2),
-        other: parseFloat(calculation.other as unknown as string).toFixed(2),
+        propertyTaxes: safeParseNumber(calculation.propertyTaxes),
+        hoa: safeParseNumber(calculation.hoa),
+        pmi: safeParseNumber(calculation.pmi),
+        homeownersInsurance: safeParseNumber(calculation.homeownersInsurance),
+        floodInsurance: safeParseNumber(calculation.floodInsurance),
+        other: safeParseNumber(calculation.other),
       });
     }
     setIsEditMode(false);
