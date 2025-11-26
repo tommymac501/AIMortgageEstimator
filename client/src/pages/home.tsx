@@ -56,7 +56,7 @@ export default function Home() {
         const canvas = document.createElement("canvas");
         let width = img.width;
         let height = img.height;
-        const maxDim = 800;
+        const maxDim = 400;
 
         if (width > height) {
           if (width > maxDim) {
@@ -76,7 +76,7 @@ export default function Home() {
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
         }
-        const compressed = canvas.toDataURL("image/jpeg", 0.6);
+        const compressed = canvas.toDataURL("image/jpeg", 0.3);
         resolve(compressed);
       };
       img.src = dataUrl;
