@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { MapPin, DollarSign, Camera, Calculator, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,12 @@ export default function Home() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [photoPreview, setPhotoPreview] = useState<string>("");
+  const [showPasteButton, setShowPasteButton] = useState(false);
+
+  // Fetch user profile to check if it's complete
+  const { data: profile } = useQuery({
+    queryKey: ["/api/profile"],
+  });
 
   const form = useForm<MortgageCalculationFormData>({
     resolver: zodResolver(mortgageCalculationFormSchema),
@@ -57,6 +63,7 @@ export default function Home() {
             const result = reader.result as string;
             setPhotoPreview(result);
             form.setValue("propertyPhotoUrl", result);
+            setShowPasteButton(false);
           };
           reader.readAsDataURL(blob);
         }
@@ -65,7 +72,49 @@ export default function Home() {
     }
   };
 
+  const triggerPaste = async () => {
+    try {
+      const imageData = await navigator.clipboard.read();
+      for (const item of imageData) {
+        if (item.type.startsWith("image/")) {
+          const blob = await item.getType(item.type);
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            setPhotoPreview(result);
+            form.setValue("propertyPhotoUrl", result);
+            setShowPasteButton(false);
+          };
+          reader.readAsDataURL(blob);
+          return;
+        }
+      }
+    } catch (err) {
+      toast({
+        title: "Paste Failed",
+        description: "No image found in clipboard",
+        variant: "destructive",
+      });
+    }
+  };
+
   const onSubmit = (data: MortgageCalculationFormData) => {
+    // Check if profile is complete (has key fields)
+    const hasCompleteProfile = profile && 
+      profile.creditScore && 
+      profile.amountDown && 
+      profile.mortgageType;
+
+    if (!hasCompleteProfile) {
+      toast({
+        title: "Complete Your Profile",
+        description: "Please set up your financial profile before calculating mortgages.",
+        variant: "default",
+      });
+      navigate("/profile");
+      return;
+    }
+
     calculateMutation.mutate(data);
   };
 
@@ -139,6 +188,7 @@ export default function Home() {
             <Card 
               className="p-6 border-2 border-dashed border-border hover-elevate cursor-pointer"
               onPaste={handlePaste}
+              onClick={() => setShowPasteButton(!showPasteButton)}
               data-testid="card-photo-paste"
             >
               {photoPreview ? (
@@ -155,12 +205,29 @@ export default function Home() {
                     className="absolute top-2 right-2"
                     onClick={(e) => {
                       e.preventDefault();
+                      e.stopPropagation();
                       setPhotoPreview("");
                       form.setValue("propertyPhotoUrl", "");
+                      setShowPasteButton(false);
                     }}
                     data-testid="button-clear-photo"
                   >
                     <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : showPasteButton ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
+                  <p className="text-sm font-medium text-foreground">Ready to paste</p>
+                  <Button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      triggerPaste();
+                    }}
+                    data-testid="button-paste-photo"
+                  >
+                    Paste from Clipboard
                   </Button>
                 </div>
               ) : (
@@ -168,7 +235,7 @@ export default function Home() {
                   <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
                     <Camera className="h-6 w-6 text-primary" />
                   </div>
-                  <p className="text-sm font-medium text-foreground mb-1">Paste photo from clipboard</p>
+                  <p className="text-sm font-medium text-foreground mb-1">Click to paste photo</p>
                   <p className="text-xs text-muted-foreground">Cmd+V or Ctrl+V</p>
                 </div>
               )}
