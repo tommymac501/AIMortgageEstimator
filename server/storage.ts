@@ -25,6 +25,7 @@ export interface IStorage {
   getCalculation(id: string): Promise<SavedCalculation | undefined>;
   getCalculationsByUserId(userId: string): Promise<SavedCalculation[]>;
   createCalculation(calculation: InsertSavedCalculation): Promise<SavedCalculation>;
+  updateCalculation(id: string, updates: Partial<InsertSavedCalculation>): Promise<SavedCalculation>;
   deleteCalculation(id: string): Promise<void>;
 }
 
@@ -106,6 +107,18 @@ export class DatabaseStorage implements IStorage {
     const [calculation] = await db
       .insert(savedCalculations)
       .values(calculationData)
+      .returning();
+    return calculation;
+  }
+
+  async updateCalculation(id: string, updates: Partial<InsertSavedCalculation>): Promise<SavedCalculation> {
+    const [calculation] = await db
+      .update(savedCalculations)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(savedCalculations.id, id))
       .returning();
     return calculation;
   }
