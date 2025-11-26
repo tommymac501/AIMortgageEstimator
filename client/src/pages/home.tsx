@@ -17,7 +17,6 @@ export default function Home() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [photoPreview, setPhotoPreview] = useState<string>("");
-  let fileInputRef: HTMLInputElement | null = null;
 
   // Fetch user profile to check if it's complete
   const { data: profile } = useQuery({
@@ -50,21 +49,38 @@ export default function Home() {
     },
   });
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setPhotoPreview(result);
-        form.setValue("propertyPhotoUrl", result);
-      };
-      reader.readAsDataURL(file);
+  const handlePhotoBoxClick = async () => {
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+      
+      for (const clipboardItem of clipboardItems) {
+        const imageTypes = clipboardItem.types.filter(type => type.startsWith('image/'));
+        
+        if (imageTypes.length > 0) {
+          const imageBlob = await clipboardItem.getType(imageTypes[0]);
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            setPhotoPreview(result);
+            form.setValue("propertyPhotoUrl", result);
+          };
+          reader.readAsDataURL(imageBlob);
+          return;
+        }
+      }
+      
+      toast({
+        title: "No image found",
+        description: "Please copy an image to your clipboard first",
+        variant: "destructive",
+      });
+    } catch (err) {
+      toast({
+        title: "Clipboard access denied",
+        description: "Unable to access clipboard. Please check permissions.",
+        variant: "destructive",
+      });
     }
-  };
-
-  const handlePhotoBoxClick = () => {
-    fileInputRef?.click();
   };
 
   const onSubmit = (data: MortgageCalculationFormData) => {
@@ -154,16 +170,6 @@ export default function Home() {
             <Label className="text-sm font-medium text-foreground">
               Property Photo <span className="text-muted-foreground font-normal">Optional</span>
             </Label>
-            <input
-              ref={(el) => {
-                fileInputRef = el;
-              }}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handlePhotoUpload}
-              data-testid="input-photo"
-            />
             <Card 
               className="p-6 border-2 border-dashed border-border hover-elevate cursor-pointer"
               onClick={handlePhotoBoxClick}
@@ -197,8 +203,8 @@ export default function Home() {
                   <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
                     <Camera className="h-6 w-6 text-primary" />
                   </div>
-                  <p className="text-sm font-medium text-foreground mb-1">Tap to add photo</p>
-                  <p className="text-xs text-muted-foreground">Camera or photo library</p>
+                  <p className="text-sm font-medium text-foreground mb-1">Tap to paste photo</p>
+                  <p className="text-xs text-muted-foreground">From clipboard</p>
                 </div>
               )}
             </Card>
