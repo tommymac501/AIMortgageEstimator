@@ -49,6 +49,40 @@ export default function Home() {
     },
   });
 
+  const compressImage = (dataUrl: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 800;
+
+        if (width > height) {
+          if (width > maxDim) {
+            height = (height * maxDim) / width;
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = (width * maxDim) / height;
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+        const compressed = canvas.toDataURL("image/jpeg", 0.6);
+        resolve(compressed);
+      };
+      img.src = dataUrl;
+    });
+  };
+
   const handlePhotoBoxClick = async () => {
     try {
       const clipboardItems = await navigator.clipboard.read();
@@ -59,10 +93,11 @@ export default function Home() {
         if (imageTypes.length > 0) {
           const imageBlob = await clipboardItem.getType(imageTypes[0]);
           const reader = new FileReader();
-          reader.onloadend = () => {
-            const result = reader.result as string;
-            setPhotoPreview(result);
-            form.setValue("propertyPhotoUrl", result);
+          reader.onloadend = async () => {
+            const dataUrl = reader.result as string;
+            const compressed = await compressImage(dataUrl);
+            setPhotoPreview(compressed);
+            form.setValue("propertyPhotoUrl", compressed);
           };
           reader.readAsDataURL(imageBlob);
           return;
