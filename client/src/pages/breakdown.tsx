@@ -8,19 +8,17 @@ import {
   Percent, 
   Shield, 
   Building2, 
-  FileText,
   Droplets,
   Umbrella,
   MoreHorizontal,
   Save,
   Edit,
   X,
-  Check
+  RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import type { SavedCalculation } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -40,6 +38,8 @@ export default function Breakdown() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [isEditMode, setIsEditMode] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [localTotal, setLocalTotal] = useState<number | null>(null);
   const [editValues, setEditValues] = useState<EditableValues>({
     propertyTaxes: "0",
     hoa: "0",
@@ -62,6 +62,12 @@ export default function Breakdown() {
     return num.toFixed(2);
   };
 
+  const safeParseFloat = (value: unknown): number => {
+    if (value === null || value === undefined) return 0;
+    const num = parseFloat(String(value));
+    return isNaN(num) ? 0 : num;
+  };
+
   // Initialize edit values when calculation loads
   useEffect(() => {
     if (calculation) {
@@ -73,6 +79,8 @@ export default function Breakdown() {
         floodInsurance: safeParseNumber(calculation.floodInsurance),
         other: safeParseNumber(calculation.other),
       });
+      setLocalTotal(null);
+      setHasUnsavedChanges(false);
     }
   }, [calculation]);
 
@@ -123,9 +131,11 @@ export default function Breakdown() {
       queryClient.invalidateQueries({ queryKey: ["/api/calculations", id] });
       queryClient.invalidateQueries({ queryKey: ["/api/calculations"] });
       setIsEditMode(false);
+      setHasUnsavedChanges(false);
+      setLocalTotal(null);
       toast({
         title: "Changes Saved",
-        description: "Your calculation has been updated.",
+        description: "Your calculation has been saved to the database.",
       });
     },
     onError: (error: Error) => {
@@ -141,8 +151,8 @@ export default function Breakdown() {
         return;
       }
       toast({
-        title: "Update Failed",
-        description: error.message || "Unable to update calculation.",
+        title: "Save Failed",
+        description: error.message || "Unable to save calculation.",
         variant: "destructive",
       });
     },
@@ -161,9 +171,21 @@ export default function Breakdown() {
       cleaned = parts[0] + "." + parts[1].slice(0, 2);
     }
     setEditValues((prev) => ({ ...prev, [field]: cleaned }));
+    setHasUnsavedChanges(true);
   };
 
-  const handleSaveEdit = () => {
+  // Update Payment - recalculates locally without saving to database
+  const handleUpdatePayment = () => {
+    const newTotal = calculateEditTotal();
+    setLocalTotal(newTotal);
+    toast({
+      title: "Payment Updated",
+      description: `New monthly payment: ${formatCurrency(newTotal)}. Click "Save Changes" to persist.`,
+    });
+  };
+
+  // Save Changes - actually persists to database
+  const handleSaveChanges = () => {
     updateMutation.mutate(editValues);
   };
 
@@ -180,6 +202,8 @@ export default function Breakdown() {
       });
     }
     setIsEditMode(false);
+    setHasUnsavedChanges(false);
+    setLocalTotal(null);
   };
 
   if (isLoading) {
@@ -265,6 +289,7 @@ export default function Breakdown() {
 
   const formatCurrency = (value: string | number) => {
     const num = typeof value === "string" ? parseFloat(value) : value;
+    if (isNaN(num)) return "$0";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
@@ -273,10 +298,10 @@ export default function Breakdown() {
     }).format(num);
   };
 
-  // Calculate live total when editing
+  // Calculate total from current edit values
   const calculateEditTotal = () => {
-    const principal = parseFloat(calculation.principal as unknown as string);
-    const interest = parseFloat(calculation.interest as unknown as string);
+    const principal = safeParseFloat(calculation.principal);
+    const interest = safeParseFloat(calculation.interest);
     const propertyTaxes = parseFloat(editValues.propertyTaxes) || 0;
     const hoa = parseFloat(editValues.hoa) || 0;
     const pmi = parseFloat(editValues.pmi) || 0;
@@ -289,19 +314,23 @@ export default function Breakdown() {
   // Calculate annual interest rate from monthly interest and loan amount
   const calculateInterestRate = () => {
     if (!calculation) return "0.00";
-    const askingPrice = parseFloat(calculation.askingPrice as unknown as string);
-    const downPayment = calculation.snapshotAmountDown ? parseFloat(calculation.snapshotAmountDown as unknown as string) : 0;
+    const askingPrice = safeParseFloat(calculation.askingPrice);
+    const downPayment = safeParseFloat(calculation.snapshotAmountDown);
     const loanAmount = askingPrice - downPayment;
-    const monthlyInterest = parseFloat(calculation.interest as unknown as string);
+    const monthlyInterest = safeParseFloat(calculation.interest);
     
     if (loanAmount <= 0) return "0.00";
     const annualRate = (monthlyInterest * 12 * 100) / loanAmount;
     return annualRate.toFixed(2);
   };
 
-  const downPaymentAmount = calculation.snapshotAmountDown ? parseFloat(calculation.snapshotAmountDown as unknown as string) : 0;
+  const downPaymentAmount = safeParseFloat(calculation.snapshotAmountDown);
   const interestRate = calculateInterestRate();
-  const displayTotal = isEditMode ? calculateEditTotal() : parseFloat(calculation.totalMonthlyPayment as unknown as string);
+  
+  // Display total: use localTotal if set (after Update Payment), otherwise calculate live in edit mode
+  const displayTotal = isEditMode 
+    ? (localTotal !== null ? localTotal : calculateEditTotal())
+    : safeParseFloat(calculation.totalMonthlyPayment);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -317,29 +346,14 @@ export default function Breakdown() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           {isEditMode ? (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleCancelEdit}
-                data-testid="button-cancel-edit"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleSaveEdit}
-                disabled={updateMutation.isPending}
-                data-testid="button-confirm-edit"
-              >
-                {updateMutation.isPending ? (
-                  <div className="h-4 w-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                ) : (
-                  <Check className="h-5 w-5 text-primary" />
-                )}
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCancelEdit}
+              data-testid="button-cancel-edit"
+            >
+              <X className="h-5 w-5" />
+            </Button>
           ) : (
             <Button
               variant="ghost"
@@ -359,7 +373,7 @@ export default function Breakdown() {
             </h1>
             <p className="text-sm text-muted-foreground">
               {isEditMode 
-                ? "Adjust the estimated values as needed" 
+                ? "Adjust values and click 'Update Payment' to recalculate" 
                 : "Your detailed monthly mortgage payment"}
             </p>
           </div>
@@ -371,8 +385,8 @@ export default function Breakdown() {
               <p className="text-5xl font-bold" data-testid="text-total-payment">
                 {formatCurrency(displayTotal)}
               </p>
-              {isEditMode && (
-                <p className="text-xs opacity-75">Updates as you edit values below</p>
+              {isEditMode && hasUnsavedChanges && (
+                <p className="text-xs opacity-75">Click "Update Payment" to recalculate</p>
               )}
             </div>
           </Card>
@@ -423,7 +437,7 @@ export default function Breakdown() {
                       <span className="text-muted-foreground">$</span>
                       <Input
                         type="text"
-                        inputMode="numeric"
+                        inputMode="decimal"
                         value={editValues[component.field]}
                         onChange={(e) => handleEditValueChange(component.field, e.target.value)}
                         className="w-24 h-9 text-right font-semibold"
@@ -448,7 +462,7 @@ export default function Breakdown() {
             </Card>
           )}
 
-          {/* Action Buttons */}
+          {/* Action Buttons - Not in edit mode */}
           {!isEditMode && (
             <div className="space-y-3">
               <Button
@@ -487,30 +501,44 @@ export default function Breakdown() {
             </div>
           )}
 
-          {/* Edit Mode Save Button */}
+          {/* Edit Mode Buttons */}
           {isEditMode && (
             <div className="space-y-3">
+              {/* Update Payment - recalculates locally without saving */}
+              <Button
+                variant="outline"
+                className="w-full h-12 rounded-full"
+                onClick={handleUpdatePayment}
+                data-testid="button-update-payment"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Update Payment
+              </Button>
+
+              {/* Save Changes - persists to database */}
               <Button
                 className="w-full h-14 text-base font-semibold rounded-full"
-                onClick={handleSaveEdit}
+                onClick={handleSaveChanges}
                 disabled={updateMutation.isPending}
-                data-testid="button-save-edits"
+                data-testid="button-save-changes"
               >
                 {updateMutation.isPending ? (
                   <span className="flex items-center gap-2">
                     <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Saving Changes...
+                    Saving...
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    <Check className="h-5 w-5" />
+                    <Save className="h-5 w-5" />
                     Save Changes
                   </span>
                 )}
               </Button>
+
+              {/* Cancel */}
               <Button
-                variant="outline"
-                className="w-full h-12 rounded-full"
+                variant="ghost"
+                className="w-full h-10 rounded-full text-muted-foreground"
                 onClick={handleCancelEdit}
                 data-testid="button-cancel-edit-bottom"
               >
