@@ -35,7 +35,7 @@ export default function Home() {
   const calculateMutation = useMutation({
     mutationFn: async (data: MortgageCalculationFormData) => {
       const response = await apiRequest("POST", "/api/calculate-mortgage", data);
-      return response;
+      return await response.json();
     },
     onSuccess: (result) => {
       navigate(`/breakdown/${result.id}`);
