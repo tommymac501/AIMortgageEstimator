@@ -144,6 +144,22 @@ export default function Breakdown() {
     }).format(num);
   };
 
+  // Calculate annual interest rate from monthly interest and loan amount
+  const calculateInterestRate = () => {
+    if (!calculation) return "0.00";
+    const askingPrice = parseFloat(calculation.askingPrice as unknown as string);
+    const downPayment = calculation.snapshotAmountDown ? parseFloat(calculation.snapshotAmountDown as unknown as string) : 0;
+    const loanAmount = askingPrice - downPayment;
+    const monthlyInterest = parseFloat(calculation.interest as unknown as string);
+    
+    if (loanAmount <= 0) return "0.00";
+    const annualRate = (monthlyInterest * 12 * 100) / loanAmount;
+    return annualRate.toFixed(2);
+  };
+
+  const downPaymentAmount = calculation.snapshotAmountDown ? parseFloat(calculation.snapshotAmountDown as unknown as string) : 0;
+  const interestRate = calculateInterestRate();
+
   return (
     <div className="min-h-screen bg-background pb-24">
       <div className="max-w-md mx-auto">
@@ -232,24 +248,29 @@ export default function Breakdown() {
               Edit Details
             </Button>
             
-            <Button
-              className="w-full h-14 text-base font-semibold rounded-full"
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-              data-testid="button-save-calculation"
-            >
-              {saveMutation.isPending ? (
-                <span className="flex items-center gap-2">
-                  <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Saving...
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <Save className="h-5 w-5" />
-                  Save Calculation
-                </span>
-              )}
-            </Button>
+            <div className="space-y-2">
+              <Button
+                className="w-full h-14 text-base font-semibold rounded-full"
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
+                data-testid="button-save-calculation"
+              >
+                {saveMutation.isPending ? (
+                  <span className="flex items-center gap-2">
+                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Save className="h-5 w-5" />
+                    Save Calculation
+                  </span>
+                )}
+              </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                with {formatCurrency(downPaymentAmount)} down payment at {interestRate}%
+              </p>
+            </div>
           </div>
         </div>
       </div>
