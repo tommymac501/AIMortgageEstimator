@@ -100,20 +100,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate request body
       const validatedData = mortgageCalculationFormSchema.parse(req.body);
       
-      // Get user's financial profile
+      // Get user's financial profile (use defaults if not set)
       const profile = await storage.getFinancialProfile(userId);
       
-      // Calculate mortgage using AI
+      // Calculate mortgage using AI with defaults
       const calculation = await calculateMortgageWithAI({
         address: validatedData.address,
         askingPrice: parseFloat(validatedData.askingPrice),
         financialProfile: {
-          age: profile?.age ?? undefined,
-          annualIncome: profile?.annualIncome ? parseFloat(profile.annualIncome) : undefined,
-          creditScore: profile?.creditScore ?? undefined,
-          amountDown: profile?.amountDown ? parseFloat(profile.amountDown) : undefined,
-          mortgageType: profile?.mortgageType ?? undefined,
-          monthlyDebt: profile?.monthlyDebt ? parseFloat(profile.monthlyDebt) : undefined,
+          age: profile?.age ?? 35,
+          annualIncome: profile?.annualIncome ? parseFloat(profile.annualIncome) : 75000,
+          creditScore: profile?.creditScore ?? 720,
+          amountDown: profile?.amountDown ? parseFloat(profile.amountDown) : (parseFloat(validatedData.askingPrice) * 0.2),
+          mortgageType: profile?.mortgageType ?? "30-year-fixed",
+          monthlyDebt: profile?.monthlyDebt ? parseFloat(profile.monthlyDebt) : 0,
           homesteadExemption: profile?.homesteadExemption ?? false,
         },
       });

@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { MapPin, DollarSign, Camera, Calculator } from "lucide-react";
+import { MapPin, DollarSign, Camera, Calculator, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,16 +44,24 @@ export default function Home() {
     },
   });
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setPhotoPreview(result);
-        form.setValue("propertyPhotoUrl", result);
-      };
-      reader.readAsDataURL(file);
+  const handlePaste = async (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const blob = items[i].getAsFile();
+        if (blob) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            setPhotoPreview(result);
+            form.setValue("propertyPhotoUrl", result);
+          };
+          reader.readAsDataURL(blob);
+        }
+        break;
+      }
     }
   };
 
@@ -128,48 +136,42 @@ export default function Home() {
             <Label className="text-sm font-medium text-foreground">
               Property Photo <span className="text-muted-foreground font-normal">Optional</span>
             </Label>
-            <Card className="p-6 border-2 border-dashed border-border hover-elevate cursor-pointer">
-              <label htmlFor="photo-upload" className="cursor-pointer">
-                <input
-                  id="photo-upload"
-                  data-testid="input-photo"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handlePhotoUpload}
-                />
-                {photoPreview ? (
-                  <div className="relative">
-                    <img
-                      src={photoPreview}
-                      alt="Property preview"
-                      className="w-full h-48 object-cover rounded-md"
-                    />
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      className="absolute top-2 right-2"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setPhotoPreview("");
-                        form.setValue("propertyPhotoUrl", "");
-                      }}
-                      data-testid="button-clear-photo"
-                    >
-                      Clear
-                    </Button>
+            <Card 
+              className="p-6 border-2 border-dashed border-border hover-elevate cursor-pointer"
+              onPaste={handlePaste}
+              data-testid="card-photo-paste"
+            >
+              {photoPreview ? (
+                <div className="relative">
+                  <img
+                    src={photoPreview}
+                    alt="Property preview"
+                    className="w-full h-48 object-cover rounded-md"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    className="absolute top-2 right-2"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setPhotoPreview("");
+                      form.setValue("propertyPhotoUrl", "");
+                    }}
+                    data-testid="button-clear-photo"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <Camera className="h-6 w-6 text-primary" />
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-                      <Camera className="h-6 w-6 text-primary" />
-                    </div>
-                    <p className="text-sm font-medium text-foreground mb-1">Tap to upload photo</p>
-                    <p className="text-xs text-muted-foreground">JPG or PNG up to 5MB</p>
-                  </div>
-                )}
-              </label>
+                  <p className="text-sm font-medium text-foreground mb-1">Paste photo from clipboard</p>
+                  <p className="text-xs text-muted-foreground">Cmd+V or Ctrl+V</p>
+                </div>
+              )}
             </Card>
           </div>
 
