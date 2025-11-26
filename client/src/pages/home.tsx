@@ -17,7 +17,7 @@ export default function Home() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [photoPreview, setPhotoPreview] = useState<string>("");
-  const [showPasteButton, setShowPasteButton] = useState(false);
+  let fileInputRef: HTMLInputElement | null = null;
 
   // Fetch user profile to check if it's complete
   const { data: profile } = useQuery({
@@ -50,35 +50,21 @@ export default function Home() {
     },
   });
 
-  const handlePaste = async (e: React.ClipboardEvent<HTMLDivElement>) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.indexOf("image") !== -1) {
-        const blob = items[i].getAsFile();
-        if (blob) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const result = reader.result as string;
-            setPhotoPreview(result);
-            form.setValue("propertyPhotoUrl", result);
-            setShowPasteButton(false);
-          };
-          reader.readAsDataURL(blob);
-        }
-        break;
-      }
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        setPhotoPreview(result);
+        form.setValue("propertyPhotoUrl", result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
-  const triggerPaste = () => {
-    // Just focus on the card to prepare for keyboard paste
-    toast({
-      title: "Ready to paste",
-      description: "Press Cmd+V (Mac) or Ctrl+V (Windows/Linux)",
-      variant: "default",
-    });
+  const handlePhotoBoxClick = () => {
+    fileInputRef?.click();
   };
 
   const onSubmit = (data: MortgageCalculationFormData) => {
@@ -168,10 +154,19 @@ export default function Home() {
             <Label className="text-sm font-medium text-foreground">
               Property Photo <span className="text-muted-foreground font-normal">Optional</span>
             </Label>
+            <input
+              ref={(el) => {
+                fileInputRef = el;
+              }}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoUpload}
+              data-testid="input-photo"
+            />
             <Card 
               className="p-6 border-2 border-dashed border-border hover-elevate cursor-pointer"
-              onPaste={handlePaste}
-              onClick={() => setShowPasteButton(!showPasteButton)}
+              onClick={handlePhotoBoxClick}
               data-testid="card-photo-paste"
             >
               {photoPreview ? (
@@ -191,35 +186,19 @@ export default function Home() {
                       e.stopPropagation();
                       setPhotoPreview("");
                       form.setValue("propertyPhotoUrl", "");
-                      setShowPasteButton(false);
                     }}
                     data-testid="button-clear-photo"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
-              ) : showPasteButton ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
-                  <Button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      triggerPaste();
-                    }}
-                    data-testid="button-paste-photo"
-                  >
-                    Paste from Clipboard
-                  </Button>
-                  <p className="text-xs text-muted-foreground">Cmd+V or Ctrl+V</p>
-                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
                     <Camera className="h-6 w-6 text-primary" />
                   </div>
-                  <p className="text-sm font-medium text-foreground mb-1">Click to paste photo</p>
-                  <p className="text-xs text-muted-foreground">Cmd+V or Ctrl+V</p>
+                  <p className="text-sm font-medium text-foreground mb-1">Tap to add photo</p>
+                  <p className="text-xs text-muted-foreground">Camera or photo library</p>
                 </div>
               )}
             </Card>
